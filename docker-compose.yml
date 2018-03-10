@@ -6,7 +6,7 @@ services:
       context: .
       dockerfile: ./Dockerfile
     ports:
-      - 127.0.0.1:3000:3000    # localhost only by default
+      - 8080:3000
     links:
       - mongo:mongo
       - redis:redis
@@ -16,11 +16,12 @@ services:
       - redis
       - elasticsearch
     environment:
+      - VIRTUAL_HOST=${CROWI_SERVER_HOST}
       - MONGO_URI=mongodb://mongo:27017/crowi
       - REDIS_URL=redis://redis:6379/crowi
       - ELASTICSEARCH_URI=http://elasticsearch:9200/crowi
-      - PASSWORD_SEED=changeme
-      # - FILE_UPLOAD=local    # activate this line if you do not want to use AWS for file upload
+      - PASSWORD_SEED=${CROWI_PASSWORD_SEED}
+      - FILE_UPLOAD=local    # activate this line if you do not want to use AWS for file upload
     command: "dockerize
               -wait tcp://mongo:27017
               -wait tcp://redis:6379
@@ -29,17 +30,20 @@ services:
               npm run server:prod"
     volumes:
       - crowi_data:/data
+    restart: always
 
   mongo:
     image: mongo:3.4
     volumes:
       - mongo_configdb:/data/configdb
       - mongo_db:/data/db
+    restart: always
 
   redis:
     image: redis:3-alpine
     volumes:
       - redis_data:/data
+    restart: always
 
   elasticsearch:
     image: elasticsearch:5.3-alpine
@@ -55,6 +59,23 @@ services:
       - es_data:/usr/share/elasticsearch/data
       - es_plugins:/usr/share/elasticsearch/plugins
       - ./esconfig:/usr/share/elasticsearch/config
+    restart: always
+
+  nginx-proxy:
+    image: jwilder/nginx-proxy
+    restart: always
+    privileged: true
+    container_name: nginx-proxy
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+    environment:
+      - DEFAULT_HOST=${CROWI_SERVER_HOST}
+    restart: always
 
 volumes:
   crowi_data:
